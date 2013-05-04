@@ -1,0 +1,37 @@
+/* Written on 5/05/2013
+   Used purely for testing, and to obtain
+   a greater knowledge of pid
+*/
+
+//Increasing MAX_SPEED leads to wider turns
+#define MAX_SPEED 50
+
+//Error is related to how high from the ground the light sensor is
+//A higher light sensor causes a greater error
+#define MAX_ERROR 5 
+
+//This constant is used to determine the change in motor speed.
+//A higher KPROPORTIONAL value leads to a wider sweep (presumably --> testing required)
+//KPROPROTIONAL should never be such that MAX_SPEED - MAX_ERROR*KPROPORTIONAL < 0
+//For a sharp turn, MAX_SPEED - MAX_ERROR*KPROPORTIONAL should be around 0.
+#define KPROPORTIONAL 10
+
+#define LEFT_MOTOR OUT_A
+#define RIGHT_MOTOR OUT_B
+#define LIGHT_SENSOR IN_1
+
+task main()
+{
+	SetSensorLight(LIGHT_SENSOR);
+	byte initialReading = Sensor(LIGHT_SENSOR);
+	byte error;
+	int turnPower;
+	while (true) {
+		error = Sensor(LIGHT_SENSOR) - initialReading;
+		if (error > MAX_ERROR) error = MAX_ERROR;
+		if (error < (-MAX_ERROR)) error = -MAX_ERROR;
+		turnPower = error*KPROPORTIONAL;
+		OnFwd(LEFT_MOTOR, MAX_SPEED - turnPower);
+		OnFwd(RIGHT_MOTOR, MAX_SPEED + turnPower);
+	}
+}
