@@ -1,0 +1,33 @@
+/*
+	Written on 05/05/2013
+	
+	Very simple program, using 3-level line follower
+*/
+
+#define MAX_SPEED 75
+#define TURNING_SPEED 50
+
+#define BOTH_MOTORS OUT_AB
+#define LEFT_MOTOR OUT_A
+#define RIGHT_MOTOR OUT_B
+#define LIGHT_SENSOR IN_1
+
+task main()
+{
+	SetSensorLight(LIGHT_SENSOR);
+	byte initialReading = Sensor(LIGHT_SENSOR);
+	byte curReading, error;
+	while (true) {
+		curReading = SENSOR(LIGHT_SENSOR);
+		error = initialReading - curReading;
+		if (error < 2 && error > -2) {
+			OnFwd(BOTH_MOTORS, MAX_SPEED);
+		} else if (error < -2) {
+			OnFwd(RIGHT_MOTOR, TURNING_SPEED);
+			OnRev(LEFT_MOTOR, TURNING_SPEED);
+		} else if (error > 2) {
+			OnFwd(LEFT_MOTOR, TURNING_SPEED);
+			OnRev(RIGHT_MOTOR, TURNING_SPEED);
+		}
+	}
+}
