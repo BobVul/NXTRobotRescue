@@ -1,0 +1,157 @@
+/* Techbricks.nl Line Follower
+   Based on a PID controller, using the NXT 1.0 light sensor
+   NXC firmware 1.28
+   www.techbricks.nl
+   last modified 03/03/2010                                    */
+
+/* Proportional gain, straight forward reaction of the controller
+   Larger values typically mean faster r+esponse since the larger the error,
+   the larger the proportional term compensation.
+   An excessively large proportional gain will lead to process instability and oscillation.*/
+//Finds the line at 30, set to half that
+#define Kproportional 15  //15
+
+/* Integral gain, improves the controller accuracy
+   Larger values imply steady state errors are eliminated more quickly.
+   The trade-off is larger overshoot: any negative error integrated during transient response
+   must be integrated away by positive error before reaching steady state.*/
+#define Kintegral 0.025//0.025
+
+/* Derivative gain, improves the controller speed
+   Larger values decrease overshoot, but slow down transient response
+   and may lead to instability due to signal noise amplification in the differentiation of the error.*/
+#define Kderivative 0  //50
+ //100
+ 
+ #define MOTOR_SPEED 50
+
+// Sample time, determined the reaction rate
+#define dt 5 //5
+
+// NXT 1.0 light sensor connected to port 2.
+#define LIGHTSENSOR Sensor(IN_3)
+#define TOUCH_SENSOR IN_4
+
+#define LEFT_MOTOR OUT_A
+#define RIGHT_MOTOR OUT_C
+
+#define FIND_DISTANCE 15
+
+task movement();
+task touch_sensor();
+
+task main()
+{
+     start movement;
+     start touch_sensor;
+}
+
+task touch_sensor()
+{
+     SetSensorTouch(TOUCH_SENSOR);
+     while (true) {
+           if (Sensor(TOUCH_SENSOR)) {
+                stop movement;
+                Off(LEFT_MOTOR);
+                Off(RIGHT_MOTOR);
+                PlayTone(TONE_A7, 1000);
+           }
+     }
+}
+
+task movement()
+{
+int error = 0;
+float previous_error = 0;
+float setpoint = 0;
+float actual_position = 0;
+float proportional = 0;
+int integral = 0;
+float derivative = 0;
+float output = 0;
+float left = 0;
+float right = 0;
+
+// Set the motor speed.
+float speed=MOTOR_SPEED;
+
+// Set the sensor light on.
+SetSensorLight(IN_3);
+// Set Sensor type.
+SENSOR_TYPE_LIGHT_ACTIVE;
+
+// Read the value from the light sensor at the start position. The sensor must be place above the black line.
+TextOut(1,LCD_LINE1,"Setpoint");
+setpoint = LIGHTSENSOR;
+NumOut(50,LCD_LINE1,setpoint);
+
+// never ending loop.
+while (true)
+  {
+   // Read the actual color sensor value.
+   actual_position = LIGHTSENSOR;
+   TextOut(1,LCD_LINE2,"Actual");
+   NumOut(50,LCD_LINE2,actual_position);
+
+   // Calculate the error, the differance between the setpoint and actual position.
+   error = setpoint - actual_position;
+      // Play a sound when the sensor is off the line
+//   if ((error < -4)||(error > 4)) //PlayTone(TONE_B7, 1);
+  // if (error < -4) PlayTone(TONE_B7, 10);
+ //  if (error > 4) PlayTone(TONE_A4, 10);
+
+   // Proportional term makes a change to the output that is proportional to the current error value.
+   proportional = Kproportional * error;
+
+   // Integrate, sum of errors
+   integral = integral + error;
+
+   // Derivative, rate of change of the process error is calculated by determining the slope of the error over time.
+   derivative = (error - previous_error) / dt;
+
+   // Calculate sum of Proportional, Integral and Derivative.
+   output = proportional + Kintegral * dt * integral + Kderivative * derivative;
+
+   // save error value for period.
+   previous_error = error;
+
+   // Controll left motor
+   left = speed - output;
+
+   // Controll right motor
+   right = speed + output;
+
+   // Adjust the left and right motor value.
+   if (left >   100) left  =  100;
+   if (left <  -100) left  = -100;
+   if (right >  100) right = 100;
+   if (right < -100) right = -100;
+
+   if (left > 0 )
+     {
+      OnRev(LEFT_MOTOR,-left);
+      TextOut(1,LCD_LINE4,"Left  Rev");
+      NumOut(55,LCD_LINE4,-left);
+     }
+   else
+     {
+      OnFwd(LEFT_MOTOR,left);
+      TextOut(1,LCD_LINE4,"Left  Fwd");
+      NumOut(55,LCD_LINE4,left);
+     }
+
+   if (right < 0 )
+     {
+       OnRev(RIGHT_MOTOR,-right);
+       TextOut(1,LCD_LINE5,"Right Rev");
+       NumOut(55,LCD_LINE5,-right);
+      }
+    else
+      {
+       OnFwd(RIGHT_MOTOR,right);
+       TextOut(1,LCD_LINE5,"Right Fwd");
+       NumOut(55,LCD_LINE5,right);
+       }
+   }
+}
+
