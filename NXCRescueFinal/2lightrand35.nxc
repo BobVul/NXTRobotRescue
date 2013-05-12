@@ -1,0 +1,115 @@
+
+#define THRESHOLD 2 //1
+#define THRESHOLD_MULTIPLIER 1 //2
+
+#define WAIT_TIME 1000
+
+#define LEFT_LIGHT_SENSOR IN_3
+#define RIGHT_LIGHT_SENSOR IN_4
+
+#define LEFT_MOTOR OUT_A
+#define RIGHT_MOTOR OUT_C
+#define BOTH_MOTORS OUT_AC
+
+#define MOTOR_SPEED 35 //35
+
+void spanLeft(void);
+void spanRight(void);
+void moveForward(int time);
+
+float initialLeftReading, initialRightReading;
+
+task main()
+{
+    SetSensorLight(LEFT_LIGHT_SENSOR);
+    SetSensorLight(RIGHT_LIGHT_SENSOR);
+    initialLeftReading = Sensor(LEFT_LIGHT_SENSOR);
+    initialRightReading = Sensor(RIGHT_LIGHT_SENSOR);
+    NumOut(30, 20, initialLeftReading);
+    NumOut(60, 20, initialRightReading);
+    float curLeft, curRight, randomV;
+    while (true) {
+        curLeft = Sensor(LEFT_LIGHT_SENSOR);
+        curRight = Sensor(RIGHT_LIGHT_SENSOR);
+        NumOut(30,30, curLeft);
+        NumOut(60, 30, curRight);
+        //handles intersection
+        if (curLeft < (initialLeftReading - THRESHOLD) && curRight < (initialRightReading - THRESHOLD)) {
+            Off(BOTH_MOTORS);
+            //chooses which direction to move in
+            randomV = rand() % 3;
+            NumOut(50, 10, randomV);
+            Wait(1000);
+            if (randomV == 0) {
+               moveForward(300);
+               spanLeft();
+            }
+            else if (randomV == 1) {
+               moveForward(500);
+            }
+            else if (randomV == 2) {
+               moveForward(300);
+               spanRight();
+            }
+        }
+        //handles case of deadend
+        else if (curLeft > (initialLeftReading + THRESHOLD*THRESHOLD_MULTIPLIER) && curRight > (initialRightReading + THRESHOLD*THRESHOLD_MULTIPLIER)) {
+            //spans left for 200 ms
+            OnFwd(RIGHT_MOTOR, MOTOR_SPEED);
+            OnRev(LEFT_MOTOR, MOTOR_SPEED);
+            Wait(200);
+            if (Sensor(LEFT_LIGHT_SENSOR) > (initialLeftReading + THRESHOLD) && Sensor(RIGHT_LIGHT_SENSOR) > (initialRightReading + THRESHOLD)) {
+                //rotates right until it finds the line again
+                OnFwd(LEFT_MOTOR, MOTOR_SPEED);
+                OnRev(RIGHT_MOTOR, MOTOR_SPEED);
+            }
+            until(Sensor(RIGHT_LIGHT_SENSOR) < (initialRightReading + THRESHOLD) || Sensor(LEFT_LIGHT_SENSOR) < (initialLeftReading + THRESHOLD));
+        }
+        //handles case of adjust to right
+        else if (curLeft > (initialLeftReading + THRESHOLD)) {
+            Off(RIGHT_MOTOR);
+            OnFwd(LEFT_MOTOR, MOTOR_SPEED);
+        }
+        //handles case of adjust to left
+        else if (curRight > (initialRightReading + THRESHOLD)) {
+            Off(LEFT_MOTOR);
+            OnFwd(RIGHT_MOTOR, MOTOR_SPEED);
+        }
+        //just moves forward
+        else
+            OnFwd(BOTH_MOTORS, MOTOR_SPEED);
+    }
+}
+
+void spanLeft(void)
+{
+    long time0 = CurrentTick();
+    OnFwd(RIGHT_MOTOR, MOTOR_SPEED);
+    OnRev(LEFT_MOTOR, MOTOR_SPEED);
+    Wait(200);
+    until((Sensor(LEFT_LIGHT_SENSOR) < (initialLeftReading - THRESHOLD) && Sensor(RIGHT_LIGHT_SENSOR) > (initialRightReading + THRESHOLD)) || (CurrentTick() - time0) > WAIT_TIME);
+    if (Sensor(LEFT_LIGHT_SENSOR) < (initialLeftReading - THRESHOLD)) return;
+    OnFwd(LEFT_MOTOR, MOTOR_SPEED);
+    OnRev(RIGHT_MOTOR, MOTOR_SPEED);
+    until(Sensor(RIGHT_LIGHT_SENSOR) < (initialRightReading - THRESHOLD));
+}
+
+void spanRight(void)
+{
+    long time0 = CurrentTick();
+    OnFwd(LEFT_MOTOR, MOTOR_SPEED);
+    OnRev(RIGHT_MOTOR, MOTOR_SPEED);
+    Wait(200);
+    until((Sensor(RIGHT_LIGHT_SENSOR) < (initialRightReading - THRESHOLD) && Sensor(LEFT_LIGHT_SENSOR) > (initialLeftReading + THRESHOLD)) || (CurrentTick() - time0) > WAIT_TIME);
+    if (Sensor(RIGHT_LIGHT_SENSOR) < (initialRightReading - THRESHOLD)) return;
+    OnFwd(RIGHT_MOTOR, MOTOR_SPEED);
+    OnRev(LEFT_MOTOR, MOTOR_SPEED);
+    until(Sensor(LEFT_LIGHT_SENSOR) < (initialLeftReading - THRESHOLD));
+}
+
+void moveForward(int time)
+{
+    OnFwd(BOTH_MOTORS, MOTOR_SPEED);
+    Wait(time);
+    Off(BOTH_MOTORS);
+}
