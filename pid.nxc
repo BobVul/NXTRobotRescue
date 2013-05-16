@@ -1,9 +1,15 @@
 // Assuming a motor range of 50 (MOTOR_BASE_POWER +/- 25)
 // and a total error range of 5 (errorOffset +/- 2.5).
 // 50 / 5 = 10 <= max turn at max error
-#define KProportional 10
-#define KIntegral 0
-#define KDerivative 0
+// Ku is 30
+//#define KProportional 18
+// oscillation period with Kp of 30 is 0.3 seconds (300 ms)
+//#define KIntegral 0.12
+//#define KDerivative 675
+
+#define KProportional 15
+#define KIntegral 0.2
+#define KDerivative 500
 
 #define LEFT_MOTOR OUT_A
 #define RIGHT_MOTOR OUT_C
@@ -15,6 +21,7 @@
 #define MOTOR_BASE_POWER 50
 
 #define LEFT_LIGHT_SENSOR IN_4
+#define TOUCH_SENSOR IN_2
 
 #define MAX_LIGHT 100
 #define MIN_LIGHT 0
@@ -29,9 +36,26 @@ int errorOffset;
 int lightMaximum;
 int lightMinimum;
 
+bool targetFound = false;
+
+task touchSensor() {
+    while (true) {
+        if (Sensor(TOUCH_SENSOR)) {
+            targetFound = true;
+            PlayTone(TONE_A4, 1000);
+            Wait(1000);
+            break;
+        }
+    }
+}
+
 task main() {
     SetSensorLight(LEFT_LIGHT_SENSOR);
     SENSOR_TYPE_LIGHT_ACTIVE;
+    
+    SetSensorTouch(TOUCH_SENSOR);
+
+    start touchSensor;
     
     findErrorOffset();
     
@@ -79,13 +103,17 @@ void runPidController(void) {
     int derivative = 0;
     unsigned long previousTime, currentTime, timeDifference;
     previousTime = CurrentTick();
-    while (true) {
+    while (!targetFound) {
         currentLight = Sensor(LEFT_LIGHT_SENSOR);
         
         currentTime = CurrentTick();
         timeDifference = currentTime - previousTime;
         
         currentError = currentLight - errorOffset;
+        if ((integral < 0 && currentError > 0) || (integral > 0 && currentError < 0)) {
+           // reset error whenever it crosses to the other side
+           integral = 0;
+        }
         if (!(currentError < lightMinimum + CONSTANT_ERROR_MARGIN || currentError > lightMaximum - CONSTANT_ERROR_MARGIN)) {
             // only set integral if it's a smallish error
             integral = integral + currentError * timeDifference;
@@ -96,8 +124,8 @@ void runPidController(void) {
         // left hand folllwer, positive when too far left
         // must turn right when positive, therefore left
         // wheel should be more powerful when positive
-        leftPower = max(0, min(100, MOTOR_BASE_POWER + motorDifference));
-        rightPower = max(0, min(100, MOTOR_BASE_POWER - motorDifference));
+        leftPower = max(-100, min(100, MOTOR_BASE_POWER + motorDifference));
+        rightPower = max(-100, min(100, MOTOR_BASE_POWER - motorDifference));
         
         LEFT_FWD(leftPower);
         RIGHT_FWD(rightPower);
@@ -105,6 +133,9 @@ void runPidController(void) {
         previousError = currentError;
         previousTime = currentTime;
     }
+    
+    Off(LEFT_MOTOR);
+    Off(RIGHT_MOTOR);
 }
 
 int max(int a, int b) {
