@@ -7,9 +7,9 @@
 //#define KIntegral 0.12
 //#define KDerivative 675
 
-#define KProportional 15
-#define KIntegral 0.2
-#define KDerivative 500
+#define KProportional 10
+#define KIntegral 0.12
+#define KDerivative 675
 
 #define LEFT_MOTOR OUT_A
 #define RIGHT_MOTOR OUT_C
@@ -18,7 +18,7 @@
 #define LEFT_FWD(x) OnFwd(LEFT_MOTOR, x)
 #define LEFT_REV(x) OnRev(LEFT_MOTOR, x)
 
-#define MOTOR_BASE_POWER 50
+#define MOTOR_BASE_POWER 35
 
 #define LEFT_LIGHT_SENSOR IN_4
 #define TOUCH_SENSOR IN_2
@@ -37,15 +37,25 @@ int lightMaximum;
 int lightMinimum;
 
 bool targetFound = false;
+bool pauseMovement = false;
 
 task touchSensor() {
+    byte ultrasonicSensor;
     while (true) {
-        if (Sensor(TOUCH_SENSOR)) {
-            targetFound = true;
+        if ((ultrasonicSensor = SensorUS(TOUCH_SENSOR)) < 10 ) {
+            //targetFound = true;
+            pauseMovement = true;
+            OnFwd(OUT_B, 100);
             PlayTone(TONE_A4, 1000);
-            Wait(1000);
+            ClearScreen();
+            NumOut(50, LCD_LINE4 , ultrasonicSensor);
+            Wait(3000);
+            Off(OUT_B);
+            pauseMovement = false;
             break;
         }
+        ClearScreen();
+        NumOut(50, LCD_LINE4 , ultrasonicSensor);
     }
 }
 
@@ -53,7 +63,7 @@ task main() {
     SetSensorLight(LEFT_LIGHT_SENSOR);
     SENSOR_TYPE_LIGHT_ACTIVE;
     
-    SetSensorTouch(TOUCH_SENSOR);
+    SetSensorUltrasonic(TOUCH_SENSOR);
 
     start touchSensor;
     
@@ -104,6 +114,11 @@ void runPidController(void) {
     unsigned long previousTime, currentTime, timeDifference;
     previousTime = CurrentTick();
     while (!targetFound) {
+        while (pauseMovement) {
+            Off(LEFT_MOTOR);
+            Off(RIGHT_MOTOR);
+            previousTime = CurrentTick();
+        }
         currentLight = Sensor(LEFT_LIGHT_SENSOR);
         
         currentTime = CurrentTick();
