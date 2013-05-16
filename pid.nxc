@@ -1,0 +1,124 @@
+// Assuming a motor range of 50 (MOTOR_BASE_POWER +/- 25)
+// and a total error range of 5 (errorOffset +/- 2.5).
+// 50 / 5 = 10 <= max turn at max error
+#define KProportional 10
+#define KIntegral 0
+#define KDerivative 0
+
+#define LEFT_MOTOR OUT_A
+#define RIGHT_MOTOR OUT_C
+#define RIGHT_FWD(x) OnFwd(RIGHT_MOTOR, x)
+#define RIGHT_REV(x) OnRev(RIGHT_MOTOR, x)
+#define LEFT_FWD(x) OnFwd(LEFT_MOTOR, x)
+#define LEFT_REV(x) OnRev(LEFT_MOTOR, x)
+
+#define MOTOR_BASE_POWER 50
+
+#define LEFT_LIGHT_SENSOR IN_4
+
+#define MAX_LIGHT 100
+#define MIN_LIGHT 0
+#define CONSTANT_ERROR_MARGIN 3
+
+void findErrorOffset(void);
+void runPidController(void);
+int max(int a, int b);
+int min(int a, int b);
+
+int errorOffset;
+int lightMaximum;
+int lightMinimum;
+
+task main() {
+    SetSensorLight(LEFT_LIGHT_SENSOR);
+    SENSOR_TYPE_LIGHT_ACTIVE;
+    
+    findErrorOffset();
+    
+    runPidController();
+}
+
+// Find the 'average' error at the edge of the line.
+// Assumes the bot is started facing right of the line, and implements a left hand follower.
+void findErrorOffset(void) {
+    lightMaximum = MIN_LIGHT;
+    lightMinimum = MAX_LIGHT;
+    int currentLight = Sensor(LEFT_LIGHT_SENSOR);
+    
+    RIGHT_FWD(MOTOR_BASE_POWER);
+    LEFT_REV(MOTOR_BASE_POWER);
+    
+    // Assuming started on white, scan left while it's as dark as the darkest
+    // it has been (i.e. has not gone over the line to the other side). Allow
+    // for some error for shadows.
+    while ((currentLight - CONSTANT_ERROR_MARGIN) <= lightMinimum) {
+        lightMaximum = max(lightMaximum, currentLight);
+        lightMinimum = min(lightMinimum, currentLight);
+        currentLight = Sensor(LEFT_LIGHT_SENSOR);
+    }
+    
+    Off(LEFT_MOTOR);
+    Off(RIGHT_MOTOR);
+    
+    errorOffset = (lightMaximum + lightMinimum) / 2;
+    
+    TextOut(1, LCD_LINE1, "Lightest:");
+    NumOut(50, LCD_LINE1, lightMaximum);
+    TextOut(1, LCD_LINE2, "Darkest:");
+    NumOut(50, LCD_LINE2, lightMinimum);
+    TextOut(1, LCD_LINE3, "Average:");
+    NumOut(50, LCD_LINE3, errorOffset);
+}
+
+void runPidController(void) {
+    int currentLight;
+    int previousError, currentError;
+    int motorDifference;
+    int leftPower, rightPower;
+    int integral = 0;
+    int derivative = 0;
+    unsigned long previousTime, currentTime, timeDifference;
+    previousTime = CurrentTick();
+    while (true) {
+        currentLight = Sensor(LEFT_LIGHT_SENSOR);
+        
+        currentTime = CurrentTick();
+        timeDifference = currentTime - previousTime;
+        
+        currentError = currentLight - errorOffset;
+        if (!(currentError < lightMinimum + CONSTANT_ERROR_MARGIN || currentError > lightMaximum - CONSTANT_ERROR_MARGIN)) {
+            // only set integral if it's a smallish error
+            integral = integral + currentError * timeDifference;
+        }
+        derivative = currentError - previousError;
+        motorDifference = KProportional * currentError + KIntegral * integral + KDerivative * derivative;
+        
+        // left hand folllwer, positive when too far left
+        // must turn right when positive, therefore left
+        // wheel should be more powerful when positive
+        leftPower = max(0, min(100, MOTOR_BASE_POWER + motorDifference));
+        rightPower = max(0, min(100, MOTOR_BASE_POWER - motorDifference));
+        
+        LEFT_FWD(leftPower);
+        RIGHT_FWD(rightPower);
+        
+        previousError = currentError;
+        previousTime = currentTime;
+    }
+}
+
+int max(int a, int b) {
+    if (a > b) {
+        return a;
+    } else {
+        return b;
+    }
+}
+
+int min(int a, int b) {
+    if (a < b) {
+        return a;
+    } else {
+        return b;
+    }
+}
